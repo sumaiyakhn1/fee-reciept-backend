@@ -1,3 +1,5 @@
+# sheet.py
+
 import os
 import requests
 from dotenv import load_dotenv
@@ -26,7 +28,7 @@ def get_sheet_tabs():
     return [s["properties"]["title"] for s in sheets]
 
 
-# === READ ALL TABS ===
+# === READ ALL TABS AND FORMAT AS DICTS ===
 def read_all_tabs():
     all_data = []
     tabs = get_sheet_tabs()
@@ -37,12 +39,14 @@ def read_all_tabs():
             continue
 
         headers = rows[0]
+
         for row in rows[1:]:
             entry = {}
+
             for i, header in enumerate(headers):
                 entry[header] = row[i] if i < len(row) else ""
 
-            entry["session"] = tab  # add session field
+            entry["session"] = tab  # add session (year)
             all_data.append(entry)
 
     return all_data
