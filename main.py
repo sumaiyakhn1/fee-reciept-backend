@@ -4,13 +4,12 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sheet import read_all_tabs
 
-
 app = FastAPI()
 
 # Allow frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,7 +27,6 @@ def home():
 
 @app.get("/search")
 def search_receipts(query: str = Query(..., min_length=1)):
-
     q = query.lower()
     data = read_all_tabs()
     results = []
@@ -69,53 +67,40 @@ def amount_in_words(n: int):
     return num2words.num2words(n, to="currency", lang="en_IN")
 
 
-@app.get("/receipt/{receipt_no}")
-def get_receipt(receipt_no: str):
-
-    all_rows = read_all_tabs()
-
-    # Find matching row
-    row = None
-    for r in all_rows:
-        if str(r.get("Receipt", "")).lower() == receipt_no.lower():
-            row = r
-            break
-
-    if row is None:
-        raise HTTPException(status_code=404, detail="Receipt not found")
-
+def format_receipt_from_row(row: dict):
     # Extract fee heads > 0
     fee_items = []
     total_amount = 0
 
     for head in FEE_HEAD_COLUMNS:
-        raw_value = row.get(head, "").strip()
-        if raw_value == "":
+        raw_value = str(row.get(head, "")).strip()
+        if not raw_value:
             continue
 
         try:
             numeric = float(raw_value.replace(",", ""))
-        except:
+        except ValueError:
             numeric = 0
 
         if numeric > 0:
-            fee_items.append({
-                "fee_head": head,
-                "amount": numeric
-            })
+            fee_items.append({"fee_head": head, "amount": numeric})
             total_amount += numeric
 
-    # Final formatted receipt
     formatted = {
         "receipt_no": row.get("Receipt"),
         "session": row.get("session"),
-        "date": row.get("Transaction Date"),
+        "date": row.get("Transaction Date"),  # you chose Transaction Date
+
         "admission_no": row.get("Adm No"),
         "student_name": row.get("Student's Name"),
         "father_name": row.get("Father Name"),
         "mobile": row.get("Mobile No"),
+        "aadhar": row.get("Student Aadhar No"),
+        "address": row.get("Address"),
         "course": row.get("Course"),
         "roll_no": row.get("Roll No"),
+        "caste": row.get("Caste Category"),
+        "academic_status": row.get("Academic Status"),
 
         # fee table
         "fee_items": fee_items,
@@ -133,3 +118,36 @@ def get_receipt(receipt_no: str):
     }
 
     return formatted
+
+
+# keep old endpoint if you ever want to use receipt number directly
+@app.get("/receipt/{receipt_no}")
+def get_receipt(receipt_no: str):
+    all_rows = read_all_tabs()
+    row = None
+    for r in all_rows:
+        if str(r.get("Receipt", "")).strip().lower() == receipt_no.strip().lower():
+            row = r
+            break
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+
+    return format_receipt_from_row(row)
+
+
+# NEW ENDPOINT: use Admission No as key (recommended)
+@app.get("/receipt/adm/{adm_no}")
+def get_receipt_by_adm(adm_no: str):
+    all_rows = read_all_tabs()
+
+    row = None
+    # if same Adm No has multiple receipts, last one (latest row) will win
+    for r in all_rows:
+        if str(r.get("Adm No", "")).strip() == adm_no.strip():
+            row = r
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+
+    return format_receipt_from_row(row)
