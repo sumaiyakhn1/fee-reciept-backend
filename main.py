@@ -6,7 +6,7 @@ from sheet import read_all_tabs
 
 app = FastAPI()
 
-# Allow frontend access
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,10 +21,9 @@ def home():
     return {"message": "Fee Receipt API Running"}
 
 
-# -----------------------------------------------
-#       SEARCH ENDPOINT (Name / AdmNo / Phone)
-# -----------------------------------------------
-
+# -------------------------
+# SEARCH (name, adm, phone)
+# -------------------------
 @app.get("/search")
 def search_receipts(query: str = Query(..., min_length=1)):
     q = query.lower()
@@ -33,19 +32,18 @@ def search_receipts(query: str = Query(..., min_length=1)):
 
     for row in data:
         name = str(row.get("Student's Name", "")).lower()
-        adm_no = str(row.get("Adm No", "")).lower()
-        mobile = str(row.get("Mobile No", "")).lower()
+        adm = str(row.get("Adm No", "")).lower()
+        phone = str(row.get("Mobile No", "")).lower()
 
-        if q in name or q in adm_no or q in mobile:
+        if q in name or q in adm or q in phone:
             results.append(row)
 
     return {"count": len(results), "results": results}
 
 
-# -----------------------------------------------
-#      RECEIPT JSON FORMATTER (fee heads > 0)
-# -----------------------------------------------
-
+# -------------------------------------
+#  FEE HEADS TO EXTRACT
+# -------------------------------------
 FEE_HEAD_COLUMNS = [
     "DEVELOPMENT CHARGE",
     "TUITION FEE",
@@ -61,36 +59,35 @@ FEE_HEAD_COLUMNS = [
 ]
 
 
-def amount_in_words(n: int):
-    """Very simple number-to-words for receipts."""
+def amount_in_words(num):
     import num2words
-    return num2words.num2words(n, to="currency", lang="en_IN")
+    return num2words.num2words(num, lang="en_IN").upper() + " ONLY"
 
 
-def format_receipt_from_row(row: dict):
-    # Extract fee heads > 0
+# -------------------------------------
+#  FORMAT RECEIPT FROM A ROW
+# -------------------------------------
+def format_receipt(row):
+
     fee_items = []
     total_amount = 0
 
     for head in FEE_HEAD_COLUMNS:
-        raw_value = str(row.get(head, "")).strip()
-        if not raw_value:
+        raw = str(row.get(head, "")).strip()
+        if raw == "":
             continue
 
         try:
-            numeric = float(raw_value.replace(",", ""))
-        except ValueError:
-            numeric = 0
+            val = float(raw.replace(",", ""))
+        except:
+            val = 0
 
-        if numeric > 0:
-            fee_items.append({"fee_head": head, "amount": numeric})
-            total_amount += numeric
+        if val > 0:
+            fee_items.append({"fee_head": head, "amount": val})
+            total_amount += val
 
-    formatted = {
+    return {
         "receipt_no": row.get("Receipt"),
-        "session": row.get("session"),
-        "date": row.get("Transaction Date"),  # you chose Transaction Date
-
         "admission_no": row.get("Adm No"),
         "student_name": row.get("Student's Name"),
         "father_name": row.get("Father Name"),
@@ -99,13 +96,15 @@ def format_receipt_from_row(row: dict):
         "address": row.get("Address"),
         "course": row.get("Course"),
         "roll_no": row.get("Roll No"),
+        "status": row.get("Academic Status"),
         "caste": row.get("Caste Category"),
-        "academic_status": row.get("Academic Status"),
+        "session": row.get("session"),
+        "date": row.get("Transaction Date"),
 
         # fee table
         "fee_items": fee_items,
-        "total_fee_amount": total_amount,
-        "total_fee_amount_words": amount_in_words(total_amount),
+        "fee_total": total_amount,
+        "fee_total_words": amount_in_words(total_amount),
 
         # payment
         "paid_amount": row.get("Amount"),
@@ -117,37 +116,20 @@ def format_receipt_from_row(row: dict):
         "user": row.get("User"),
     }
 
-    return formatted
 
-
-# keep old endpoint if you ever want to use receipt number directly
-@app.get("/receipt/{receipt_no}")
-def get_receipt(receipt_no: str):
-    all_rows = read_all_tabs()
-    row = None
-    for r in all_rows:
-        if str(r.get("Receipt", "")).strip().lower() == receipt_no.strip().lower():
-            row = r
-            break
-
-    if row is None:
-        raise HTTPException(status_code=404, detail="Receipt not found")
-
-    return format_receipt_from_row(row)
-
-
-# NEW ENDPOINT: use Admission No as key (recommended)
+# -------------------------------------
+# VIEW RECEIPT BY ADMISSION NO
+# -------------------------------------
 @app.get("/receipt/adm/{adm_no}")
-def get_receipt_by_adm(adm_no: str):
-    all_rows = read_all_tabs()
+def receipt_by_adm(adm_no: str):
+
+    data = read_all_tabs()
 
     row = None
-    # if same Adm No has multiple receipts, last one (latest row) will win
-    for r in all_rows:
+    for r in data:
         if str(r.get("Adm No", "")).strip() == adm_no.strip():
-            row = r
+            row = r   # keep latest one
+    if not row:
+        raise HTTPException(404, "Receipt not found")
 
-    if row is None:
-        raise HTTPException(status_code=404, detail="Receipt not found")
-
-    return format_receipt_from_row(row)
+    return format_receipt(row)
