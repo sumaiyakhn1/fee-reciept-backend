@@ -22,7 +22,7 @@ def home():
 
 
 # ------------------------------------------------
-# VISITOR COUNTER
+# VISITOR COUNTER (START FROM 95)
 # ------------------------------------------------
 
 COUNTER_FILE = "counter.txt"
@@ -30,20 +30,18 @@ COUNTER_FILE = "counter.txt"
 def read_counter():
     if not os.path.exists(COUNTER_FILE):
         with open(COUNTER_FILE, "w") as f:
-            f.write("0")
-        return 0
+            f.write("95")  # start from 95
+        return 95
 
     with open(COUNTER_FILE, "r") as f:
         try:
-            return int(f.read().strip() or 0)
+            return int(f.read().strip() or 95)
         except:
-            return 0
-
+            return 95
 
 def write_counter(val):
     with open(COUNTER_FILE, "w") as f:
         f.write(str(val))
-
 
 @app.get("/visit")
 def visit_counter():
@@ -89,7 +87,6 @@ FEE_HEAD_COLUMNS = [
     "Hostel",
 ]
 
-
 def amount_in_words(num):
     import num2words
     return num2words.num2words(num, lang="en_IN").upper() + " ONLY"
@@ -132,18 +129,15 @@ def format_receipt(row):
         "session": row.get("session"),
         "date": row.get("Transaction Date"),
 
-        # fee table
         "fee_items": fee_items,
         "fee_total": total_amount,
         "fee_total_words": amount_in_words(total_amount),
 
-        # payment
         "paid_amount": row.get("Amount"),
         "method": row.get("Method"),
         "payment_details": row.get("Payment Details"),
         "remarks": row.get("Remarks"),
 
-        # footer
         "user": row.get("User"),
     }
 
@@ -159,7 +153,7 @@ def receipt_by_adm(adm_no: str):
     row = None
     for r in data:
         if str(r.get("Adm No", "")).strip() == adm_no.strip():
-            row = r   # keep latest one
+            row = r
     if not row:
         raise HTTPException(404, "Receipt not found")
 
