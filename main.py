@@ -3,6 +3,7 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sheet import read_all_tabs
+import os
 
 app = FastAPI()
 
@@ -15,10 +16,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/")
 def home():
     return {"message": "Fee Receipt API Running"}
+
+
+# ------------------------------------------------
+# VISITOR COUNTER
+# ------------------------------------------------
+
+COUNTER_FILE = "counter.txt"
+
+def read_counter():
+    if not os.path.exists(COUNTER_FILE):
+        with open(COUNTER_FILE, "w") as f:
+            f.write("0")
+        return 0
+
+    with open(COUNTER_FILE, "r") as f:
+        try:
+            return int(f.read().strip() or 0)
+        except:
+            return 0
+
+
+def write_counter(val):
+    with open(COUNTER_FILE, "w") as f:
+        f.write(str(val))
+
+
+@app.get("/visit")
+def visit_counter():
+    count = read_counter() + 1
+    write_counter(count)
+    return {"visitors": count}
 
 
 # -------------------------
